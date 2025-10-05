@@ -1,39 +1,38 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDto } from './dto';
-
+import { LoginDto, RegisterDto } from './dto';
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService, private jwt: JwtService) {}
-
-  async validateUser(email: string, pass: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) return null;
-    const match = await bcrypt.compare(pass, user.password);
-    if (match) {
-      const { password, ...rest } = user;
-      return rest;
-    }
-    return null;
-  }
-
-  async login(user: any) {
-    const payload = { sub: user.id, email: user.email, role: user.role };
-    return { access_token: this.jwt.sign(payload) };
-  }
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+  ) {}
 
   async register(dto: RegisterDto) {
     const hashed = await bcrypt.hash(dto.password, 10);
-    return this.prisma.user.create({
-      data: {
-        email: dto.email,
-        password: hashed,
-        name: dto.name,
-        role: dto.role,
-      },
+    const user = await this.prisma.user.create({
+      data: { email: dto.email, password: hashed, name: dto.name, role: dto.role },
     });
+    return this.signToken(user.id, user.email);
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (!user || !(await bcrypt.compare(dto.password, user.password))) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    return this.signToken(user.id, user.email, user.role);
+  }
+
+  private signToken(id: number, email: string, role?: string) {
+    const payload = { sub: id, email, role };
+    return {
+      access_token: this.jwt.sign(payload),
+    };
   }
 }
