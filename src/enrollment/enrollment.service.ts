@@ -1,26 +1,28 @@
-import { Injectable } from '@nestjs/common';
-import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
-import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class EnrollmentService {
-  create(createEnrollmentDto: CreateEnrollmentDto) {
-    return 'This action adds a new enrollment';
+  constructor(private prisma: PrismaService) {}
+
+  async enroll(courseId: number, userId: number) {
+    const existing = await this.prisma.enrollment.findUnique({
+      where: {
+        courseId_studentId: { courseId, studentId: userId },
+      },
+    });
+
+    if (existing) throw new BadRequestException('Already enrolled');
+
+    return this.prisma.enrollment.create({
+      data: { courseId, studentId: userId },
+    });
   }
 
-  findAll() {
-    return `This action returns all enrollment`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} enrollment`;
-  }
-
-  update(id: number, updateEnrollmentDto: UpdateEnrollmentDto) {
-    return `This action updates a #${id} enrollment`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} enrollment`;
+  async getStudents(courseId: number) {
+    return this.prisma.enrollment.findMany({
+      where: { courseId },
+      include: { student: true },
+    });
   }
 }

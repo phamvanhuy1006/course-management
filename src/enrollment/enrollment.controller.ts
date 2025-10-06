@@ -1,34 +1,54 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  Get,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { EnrollmentService } from './enrollment.service';
-import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
-import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
+import { UserRole } from '@prisma/client';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { EnrollDto } from './dto/enrollment.dto';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guards';
+import { RolesGuard } from 'src/common/guards/roles.guard';
 
-@Controller('enrollment')
+@ApiTags('Enrollments')
+@ApiBearerAuth()
+@Controller('enrollments')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class EnrollmentController {
   constructor(private readonly enrollmentService: EnrollmentService) {}
 
   @Post()
-  create(@Body() createEnrollmentDto: CreateEnrollmentDto) {
-    return this.enrollmentService.create(createEnrollmentDto);
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Enroll a student into a course' })
+  @ApiResponse({
+    status: 201,
+    description: 'The student has been successfully enrolled in the course.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Already enrolled or invalid course ID.',
+  })
+  async enroll(@Body() dto: EnrollDto, @Req() req) {
+    return this.enrollmentService.enroll(dto.courseId, req.user.id);
   }
 
-  @Get()
-  findAll() {
-    return this.enrollmentService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.enrollmentService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateEnrollmentDto: UpdateEnrollmentDto) {
-    return this.enrollmentService.update(+id, updateEnrollmentDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.enrollmentService.remove(+id);
+  @Get(':courseId/students')
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all students enrolled in a specific course' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of students enrolled in the given course.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden. Only instructor or admin can access this.',
+  })
+  async getStudents(@Param('courseId') courseId: number) {
+    return this.enrollmentService.getStudents(Number(courseId));
   }
 }

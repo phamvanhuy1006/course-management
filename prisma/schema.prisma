@@ -49,4 +49,6 @@ model Enrollment {
 
   student  User   @relation(fields: [studentId], references: [id])
   course   Course @relation(fields: [courseId], references: [id])
+
+   @@unique([courseId, studentId])
 }
